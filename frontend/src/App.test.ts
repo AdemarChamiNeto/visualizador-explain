@@ -18,6 +18,19 @@ describe("tela de colar plano", () => {
   });
 });
 
+describe("link direto para um exemplo", () => {
+  it("#exemplo=nested-loop abre o exemplo na aba de colar", () => {
+    window.location.hash = "#exemplo=nested-loop";
+    try {
+      const w = mount(App);
+      expect(w.find('[role=tab][aria-selected="true"]').text()).toBe("Colar um plano");
+      expect(w.findAll(".cartao")).toHaveLength(3);
+    } finally {
+      window.location.hash = "";
+    }
+  });
+});
+
 describe("fluxo do banco de exemplo com índice hipotético", () => {
   it("roda, compara, abre o plano com o índice (sem alertas) e volta ao plano real", async () => {
     const respostas = [

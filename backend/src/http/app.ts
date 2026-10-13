@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import compression from "compression";
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import { ipKeyGenerator, rateLimit } from "express-rate-limit";
@@ -47,6 +48,7 @@ export function criarApp(pool: pg.Pool, opcoes: OpcoesApp = {}) {
   app.set("trust proxy", 1); // atrás do proxy do Render: o IP real vem do X-Forwarded-For
   app.disable("x-powered-by");
   app.use(helmet());
+  app.use(compression()); // JS, CSS e o JSON dos planos (que é grande) vão comprimidos
 
   // sem CORS: front e API no mesmo domínio. Corpo pequeno: a consulta tem no máximo 5 mil caracteres
   app.use("/api", express.json({ limit: "20kb" }), limite(120, "READ_RATE_LIMIT"));

@@ -3,8 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Visualizador de EXPLAIN</title>
-    <meta name="description" content="Veja o plano de execução do PostgreSQL em árvore, com o tempo de cada nó e alertas." />
+    <title>Visualizador de EXPLAIN do PostgreSQL</title>
+    <meta name="description" content="Rode EXPLAIN ANALYZE num banco de exemplo ou cole o seu plano: árvore com o tempo de cada nó, estimativas erradas, Seq Scan e índice hipotético para comparar." />
+    <link rel="canonical" href="__PUBLIC_URL__/" />
+    <meta name="theme-color" content="#3451b2" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content="Visualizador de EXPLAIN do PostgreSQL" />
+    <meta property="og:description" content="O plano de execução em árvore: quanto tempo cada passo gastou, onde a estimativa errou e o que um índice mudaria." />
+    <meta property="og:url" content="__PUBLIC_URL__/" />
+    <meta property="og:image" content="__PUBLIC_URL__/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Árvore de um plano de execução com o tempo de cada nó e um alerta de estimativa errada" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Visualizador de EXPLAIN",
+        "url": "__PUBLIC_URL__/",
+        "description": "Visualizador de planos de execução do PostgreSQL: EXPLAIN ANALYZE num banco de exemplo, alertas e índice hipotético (HypoPG).",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "inLanguage": "pt-BR",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+        "author": { "@type": "Person", "name": "Ademar C. Neto", "url": "https://ademarchamineto.github.io" },
+        "codeRepository": "https://github.com/AdemarChamiNeto/visualizador-explain"
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

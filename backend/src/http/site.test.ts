@@ -20,6 +20,7 @@ before(() => {
   fs.writeFileSync(path.join(pasta, "404.html"), "<h1>Não encontrada</h1>");
   fs.writeFileSync(path.join(pasta, "assets", "app-abc123.js"), "console.log(1)");
   fs.writeFileSync(path.join(pasta, "favicon.svg"), "<svg/>");
+  fs.writeFileSync(path.join(pasta, "privacidade.html"), '<link rel="canonical" href="__PUBLIC_URL__/privacidade.html" />');
   server = criarApp(pool, { pastaSite: pasta, urlPublica: "https://explain.exemplo.com/" }).listen(0);
   origem = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -36,11 +37,26 @@ test("a página troca __PUBLIC_URL__ pelo endereço real e não fica em cache", 
   assert.equal(res.headers.get("cache-control"), "no-cache");
 });
 
+test("responde comprimido quando o navegador aceita", async () => {
+  fs.writeFileSync(path.join(pasta, "assets", "grande-abc123.js"), "console.log('plano');\n".repeat(200));
+  const res = await fetch(`${origem}/assets/grande-abc123.js`, { headers: { "accept-encoding": "gzip" } });
+  assert.equal(res.headers.get("content-encoding"), "gzip");
+});
+
 test("arquivos do build com cache de 1 ano; outros arquivos com cache curto", async () => {
   const js = await fetch(`${origem}/assets/app-abc123.js`);
   assert.equal(js.status, 200);
   assert.match(js.headers.get("cache-control") ?? "", /max-age=31536000, immutable/);
   assert.match((await fetch(`${origem}/favicon.svg`)).headers.get("cache-control") ?? "", /max-age=3600/);
+});
+
+test("robots, sitemap, llms.txt e privacidade usam o endereço real; a API fica fora do índice", async () => {
+  const robots = await (await fetch(`${origem}/robots.txt`)).text();
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Sitemap: https:\/\/explain\.exemplo\.com\/sitemap\.xml/);
+  assert.match(await (await fetch(`${origem}/sitemap.xml`)).text(), /<loc>https:\/\/explain\.exemplo\.com\/privacidade\.html<\/loc>/);
+  assert.match(await (await fetch(`${origem}/llms.txt`)).text(), /https:\/\/explain\.exemplo\.com\/#exemplo=juncao/);
+  assert.equal(await (await fetch(`${origem}/privacidade.html`)).text(), '<link rel="canonical" href="https://explain.exemplo.com/privacidade.html" />');
 });
 
 test("caminho que não existe é 404 de verdade (HTML para página, JSON para a API)", async () => {
