@@ -1,0 +1,13 @@
+# Blueprint do Render: New + → Blueprint → escolha este repositório.
+services:
+  - type: web
+    name: visualizador-explain
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # connection string DIRETA do projeto Neon só deste site (sem "-pooler"), com ?sslmode=require
+      - key: VISITANTE_PASSWORD # senha do papel que roda as consultas de quem visita (a migração aplica a cada subida)
+        generateValue: true
