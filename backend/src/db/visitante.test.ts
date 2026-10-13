@@ -6,19 +6,14 @@ import { migrate, visitorUrl } from "./migrate.js";
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://dono:dono-dev@localhost:5434/explain_test";
 const PASSWORD = process.env.VISITANTE_PASSWORD ?? "visitante-dev";
 
-let dono: pg.Client;
 let visitante: pg.Client;
 
 before(async () => {
   await migrate(DATABASE_URL, PASSWORD, () => {});
-  dono = new pg.Client({ connectionString: DATABASE_URL });
   visitante = new pg.Client({ connectionString: visitorUrl(DATABASE_URL, PASSWORD) });
-  await Promise.all([dono.connect(), visitante.connect()]);
-  await dono.query("INSERT INTO loja.categorias (nome) VALUES ('Teste') ON CONFLICT (nome) DO NOTHING");
+  await visitante.connect();
 });
-after(async () => {
-  await Promise.all([dono?.end(), visitante?.end()]);
-});
+after(() => visitante?.end());
 
 /** Código SQLSTATE do erro (ex.: 42501 = sem permissão). */
 async function sqlstate(sql: string): Promise<string> {
@@ -32,7 +27,7 @@ async function sqlstate(sql: string): Promise<string> {
 }
 
 test("o visitante lê a loja sem precisar escrever o schema (search_path = loja)", async () => {
-  const { rows } = await visitante.query<{ n: number }>("SELECT count(*)::int AS n FROM categorias WHERE nome = 'Teste'");
+  const { rows } = await visitante.query<{ n: number }>("SELECT count(*)::int AS n FROM categorias WHERE nome = 'Livros'");
   assert.equal(rows[0].n, 1);
 });
 
