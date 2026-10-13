@@ -94,7 +94,9 @@ test("cabeçalhos de segurança, sem x-powered-by e 404 em JSON", async () => {
   assert.deepEqual(await res.json(), { error: "Rota não encontrada" });
   assert.equal(res.headers.get("x-powered-by"), null);
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
-  assert.ok(res.headers.get("content-security-policy"));
+  const csp = res.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /script-src 'self' https:\/\/www\.googletagmanager\.com/); // GA e Clarity, nada além
+  assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
 });
 
 test("OpenAPI: toda rota do app está documentada e nenhuma documentada some", () => {
