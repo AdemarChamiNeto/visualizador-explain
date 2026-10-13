@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      # dono do banco SEM superusuário, igual ao Neon (criado pelo docker/init.sql)
+      DATABASE_URL: postgres://dono:dono-dev@localhost:5432/explain_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      # "services" não constrói imagem: o Postgres com HypoPG sobe à mão
+      - name: Postgres 16 + HypoPG
+        working-directory: .
+        run: |
+          docker build -t pg-hypopg docker/postgres
+          docker run -d --name db -e POSTGRES_PASSWORD=postgres-ci -p 5432:5432 \
+            -v "$PWD/docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" pg-hypopg
+          until docker exec db pg_isready -U postgres -h localhost >/dev/null 2>&1; do sleep 2; done
+          until PGPASSWORD=dono-dev psql -h localhost -U dono -d explain_test -c "SELECT 1 FROM pg_extension WHERE extname = 'hypopg'" | grep -q 1; do sleep 2; done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
