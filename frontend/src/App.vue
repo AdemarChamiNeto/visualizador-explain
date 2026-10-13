@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
+import EntradaBanco from "./componentes/EntradaBanco.vue";
 import ListaAlertas from "./componentes/ListaAlertas.vue";
 import NoPlano from "./componentes/NoPlano.vue";
 import PainelNo from "./componentes/PainelNo.vue";
 import { gerarAlertas } from "./plano/alertas";
-import { lerTexto, percorrer, PlanoInvalido } from "./plano/ler";
+import { lerPlano, lerTexto, percorrer, PlanoInvalido } from "./plano/ler";
 import type { Plano } from "./plano/tipos";
 import { tempo } from "./plano/formato";
 import juncao from "./plano/exemplos/juncao.json";
@@ -20,6 +21,7 @@ const EXEMPLOS = [
   { nome: "Ordenação em disco", json: ordenacaoDisco },
 ];
 
+const aba = ref<"banco" | "colar">("banco");
 const texto = ref("");
 const erro = ref("");
 const plano = ref<Plano | null>(null);
@@ -35,12 +37,16 @@ async function selecionar(id: string) {
   document.querySelector(`[data-no="${id}"]`)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
 }
 
+function abrir(p: Plano) {
+  plano.value = p;
+  // abre já no nó do alerta mais grave (ou na raiz): o painel nunca começa vazio
+  selecionado.value = alertas.value[0]?.noId ?? p.raiz.id;
+}
+
 function ler() {
   try {
-    plano.value = lerTexto(texto.value);
+    abrir(lerTexto(texto.value));
     erro.value = "";
-    // abre já no nó do alerta mais grave (ou na raiz): o painel nunca começa vazio
-    selecionado.value = alertas.value[0]?.noId ?? plano.value.raiz.id;
   } catch (e) {
     if (!(e instanceof PlanoInvalido)) throw e;
     erro.value = e.message;
@@ -60,8 +66,13 @@ function exemplo(json: unknown) {
   </header>
 
   <main class="pagina">
-    <section class="entrada" aria-labelledby="t-colar">
-      <h2 id="t-colar">Colar um plano</h2>
+    <section class="entrada" aria-label="Consulta">
+      <div class="abas" role="tablist">
+        <button type="button" role="tab" :aria-selected="aba === 'banco'" @click="aba = 'banco'">Banco de exemplo</button>
+        <button type="button" role="tab" :aria-selected="aba === 'colar'" @click="aba = 'colar'">Colar um plano</button>
+      </div>
+      <EntradaBanco v-if="aba === 'banco'" @plano="(json) => abrir(lerPlano(json))" />
+      <template v-else>
       <label for="plano-json">Saída de <code>EXPLAIN (ANALYZE, FORMAT JSON)</code></label>
       <textarea id="plano-json" v-model="texto" class="sql" rows="10" spellcheck="false" placeholder='[ { "Plan": { "Node Type": ... } } ]'></textarea>
       <button type="button" class="principal" @click="ler">Ler plano</button>
@@ -71,6 +82,7 @@ function exemplo(json: unknown) {
         <button v-for="e in EXEMPLOS" :key="e.nome" type="button" class="chip" @click="exemplo(e.json)">{{ e.nome }}</button>
       </p>
       <p class="nota">O plano colado é lido no seu navegador: nada vai para o servidor.</p>
+      </template>
     </section>
 
     <section v-if="plano" class="resultado" aria-labelledby="t-plano">
@@ -100,14 +112,10 @@ function exemplo(json: unknown) {
 @media (max-width: 860px) { .pagina { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 32px; } }
 h2 { font-size: 1.05rem; margin: 0 0 10px; }
 .entrada { display: grid; gap: 8px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; }
-label { font-size: .9em; color: var(--suave); }
-textarea { width: 100%; resize: vertical; border: 1px solid var(--borda); border-radius: var(--raio); padding: 8px; background: var(--fundo); }
-.principal { justify-self: start; background: var(--destaque); color: var(--sobre-destaque); border: 0; border-radius: var(--raio); padding: 8px 16px; cursor: pointer; font-weight: 600; }
-.chip { margin: 4px 4px 0 0; background: none; border: 1px solid var(--borda); border-radius: 99px; padding: 2px 10px; cursor: pointer; font-size: .85em; }
-.chip:hover { border-color: var(--destaque); }
-.exemplos, .nota { margin: 0; font-size: .9em; color: var(--suave); }
-.erro { margin: 0; padding: 8px 10px; border-radius: var(--raio); background: var(--aviso-fundo); color: var(--aviso); }
 .resumo { margin: 0 0 12px; color: var(--suave); }
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); margin-bottom: 4px; }
+.abas button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; color: var(--suave); }
+.abas button[aria-selected="true"] { color: var(--texto); border-bottom-color: var(--destaque); font-weight: 600; }
 .resultado { display: grid; gap: 16px; align-content: start; }
 .resultado > h2, .resumo { margin-bottom: 0; }
 .plano-e-painel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 16px; align-items: start; }

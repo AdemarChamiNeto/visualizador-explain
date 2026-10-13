@@ -5,6 +5,7 @@ import App from "./App.vue";
 describe("tela de colar plano", () => {
   it("o exemplo carrega a árvore; JSON ruim mostra o que fazer", async () => {
     const w = mount(App);
+    await w.findAll("[role=tab]")[1].trigger("click"); // aba "Colar um plano"
     await w.findAll(".chip")[1].trigger("click");
     expect(w.findAll(".cartao")).toHaveLength(7);
     expect(w.find(".resumo").text()).toMatch(/Execução: .*7 nós/);

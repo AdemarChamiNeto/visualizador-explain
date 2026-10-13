@@ -41,6 +41,7 @@ describe("lista de alertas", () => {
 describe("página com o plano", () => {
   it("abre no nó do alerta mais grave, e o alerta leva o painel para o nó dele", async () => {
     const w = mount(App);
+    await w.findAll("[role=tab]")[1].trigger("click"); // aba "Colar um plano"
     await w.findAll(".chip")[2].trigger("click"); // Nested Loop
     expect(w.find(".painel h3").text()).toBe("Seq Scan em pedidos"); // alerta alto
     expect(w.find('[data-no="0.0"]').classes()).toContain("selecionado");
