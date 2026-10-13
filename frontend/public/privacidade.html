@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacidade · Visualizador de EXPLAIN</title>
+    <meta name="description" content="O que o Visualizador de EXPLAIN guarda (quase nada) e para onde vão as consultas." />
+    <link rel="canonical" href="__PUBLIC_URL__/privacidade.html" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <style>
+      :root { color-scheme: light dark; --fundo: #f6f7f9; --texto: #1d2733; --suave: #5b6675; --destaque: #3451b2; font: 16px/1.6 system-ui, sans-serif; }
+      @media (prefers-color-scheme: dark) { :root { --fundo: #12161c; --texto: #e6eaf0; --suave: #9aa5b4; --destaque: #8ea6ff; } }
+      body { margin: 0; background: var(--fundo); color: var(--texto); }
+      main { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+      a { color: var(--destaque); }
+      li { margin-bottom: 6px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">← Voltar ao visualizador</a></p>
+      <h1>Privacidade</h1>
+      <p>O Visualizador de EXPLAIN é um projeto de portfólio. Não tem cadastro nem login.</p>
+      <h2>O que acontece com o que você digita</h2>
+      <ul>
+        <li><strong>Plano colado:</strong> é lido só no seu navegador. Nada vai para o servidor.</li>
+        <li><strong>Consulta no banco de exemplo:</strong> vai para o servidor, roda no banco de exemplo (uma loja fictícia) e não é guardada. O servidor só registra erros internos, para corrigir bugs.</li>
+        <li><strong>Limite de uso:</strong> o endereço IP é usado por alguns minutos, só em memória, para limitar o número de consultas.</li>
+      </ul>
+      <p>O banco de exemplo tem só dados fictícios, gerados automaticamente. O app roda no Render e o banco no Neon, sempre por HTTPS.</p>
+      <h2>Contato</h2>
+      <p>Dúvidas: fale com o autor pelo <a href="https://github.com/AdemarChamiNeto">GitHub</a>.</p>
+    </main>
+  </body>
+</html>

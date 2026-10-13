@@ -16,10 +16,10 @@ import seqScan from "./plano/exemplos/seq-scan.json";
 
 // planos reais gravados do banco de exemplo: a tela funciona mesmo sem a API
 const EXEMPLOS = [
-  { nome: "Seq Scan sem índice", json: seqScan },
-  { nome: "Junção com estimativa errada", json: juncao },
-  { nome: "Nested Loop", json: nestedLoop },
-  { nome: "Ordenação em disco", json: ordenacaoDisco },
+  { id: "seq-scan", nome: "Seq Scan sem índice", json: seqScan },
+  { id: "juncao", nome: "Junção com estimativa errada", json: juncao },
+  { id: "nested-loop", nome: "Nested Loop", json: nestedLoop },
+  { id: "ordenacao-disco", nome: "Ordenação em disco", json: ordenacaoDisco },
 ];
 
 const aba = ref<"banco" | "colar">("banco");
@@ -65,6 +65,13 @@ function ler() {
 function exemplo(json: unknown) {
   texto.value = JSON.stringify(json, null, 2);
   ler();
+}
+
+// link direto para um exemplo (#exemplo=juncao): para compartilhar e para a imagem de prévia do site
+const doLink = EXEMPLOS.find((e) => location.hash === `#exemplo=${e.id}`);
+if (doLink) {
+  aba.value = "colar";
+  exemplo(doLink.json);
 }
 </script>
 
@@ -116,6 +123,12 @@ function exemplo(json: unknown) {
       </div>
     </section>
   </main>
+  <footer class="rodape">
+    Projeto de portfólio de <a href="https://ademarchamineto.github.io">Ademar C. Neto</a> ·
+    <a href="https://github.com/AdemarChamiNeto/visualizador-explain">código</a> ·
+    <a href="/api/docs.json">API</a> ·
+    <a href="/privacidade.html">privacidade</a>
+  </footer>
 </template>
 
 <style scoped>
@@ -127,6 +140,8 @@ function exemplo(json: unknown) {
 h2 { font-size: 1.05rem; margin: 0 0 10px; }
 .entrada { display: grid; gap: 8px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; }
 .resumo { margin: 0 0 12px; color: var(--suave); }
+.rodape { padding: 16px 24px 32px; color: var(--suave); font-size: .9em; }
+.rodape a { color: var(--destaque); }
 .link { background: none; border: 0; padding: 0; color: var(--destaque); cursor: pointer; text-decoration: underline; }
 .abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); margin-bottom: 4px; }
 .abas button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; color: var(--suave); }
