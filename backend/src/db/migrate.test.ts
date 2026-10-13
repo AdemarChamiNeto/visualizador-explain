@@ -4,10 +4,11 @@ import pg from "pg";
 import { migrate } from "./migrate.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://dono:dono-dev@localhost:5434/explain_test";
+const PASSWORD = process.env.VISITANTE_PASSWORD ?? "visitante-dev";
 
 let dono: pg.Client;
 before(async () => {
-  await migrate(DATABASE_URL, () => {});
+  await migrate(DATABASE_URL, PASSWORD, () => {});
   dono = new pg.Client({ connectionString: DATABASE_URL });
   await dono.connect();
 });
@@ -19,7 +20,7 @@ test("o dono do banco não é superusuário (igual ao Neon)", async () => {
 });
 
 test("migrar de novo não aplica nada", async () => {
-  assert.deepEqual(await migrate(DATABASE_URL, () => {}), []);
+  assert.deepEqual(await migrate(DATABASE_URL, PASSWORD, () => {}), []);
 });
 
 test("a HypoPG funciona: o plano usa um índice que não existe de verdade", async () => {

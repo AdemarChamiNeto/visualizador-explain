@@ -11,6 +11,7 @@ jobs:
     env:
       # dono do banco SEM superusuário, igual ao Neon (criado pelo docker/init.sql)
       DATABASE_URL: postgres://dono:dono-dev@localhost:5432/explain_test
+      VISITANTE_PASSWORD: visitante-ci
     defaults:
       run:
         working-directory: backend

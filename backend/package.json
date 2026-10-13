@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "migrate": "tsx --env-file=.env src/db/run-migrate.ts",
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "check": "tsc --noEmit"
   },
