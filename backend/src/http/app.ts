@@ -47,7 +47,16 @@ export function criarApp(pool: pg.Pool, opcoes: OpcoesApp = {}) {
   const app = express();
   app.set("trust proxy", 1); // atrás do proxy do Render: o IP real vem do X-Forwarded-For
   app.disable("x-powered-by");
-  app.use(helmet());
+  // CSP padrão do helmet + GA4 e Clarity, que só carregam depois do consentimento (frontend/src/consentimento.ts)
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        "script-src": ["'self'", "https://www.googletagmanager.com", "https://www.clarity.ms", "https://*.clarity.ms"],
+        "connect-src": ["'self'", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.clarity.ms"],
+        "img-src": ["'self'", "data:", "https://*.google-analytics.com", "https://*.googletagmanager.com", "https://*.clarity.ms"],
+      },
+    },
+  }));
   app.use(compression()); // JS, CSS e o JSON dos planos (que é grande) vão comprimidos
 
   // sem CORS: front e API no mesmo domínio. Corpo pequeno: a consulta tem no máximo 5 mil caracteres
