@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import type pg from "pg";
 import { z } from "zod";
-import { ErroBanco, ErroConsulta, explicar, MAX_SQL } from "../explain/executar.js";
+import { compararIndice, ErroBanco, ErroConsulta, explicar, listarTabelas, MAX_SQL, type Tabela } from "../explain/executar.js";
 import { openapi } from "./openapi.js";
 
 const MIN = 60_000;
@@ -23,6 +23,17 @@ const corpoExplain = z.object({
   analyze: z.boolean().default(true),
 }).strict();
 
+const nome = z.string().min(1).max(63);
+const corpoIndice = z.object({
+  sql: corpoExplain.shape.sql,
+  tabela: nome,
+  colunas: z.array(nome).min(1).max(3),
+}).strict();
+
+const invalido = (issues: z.ZodIssue[]) => ({
+  details: issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+});
+
 /** Monta o app sem abrir porta (os testes sobem em memória). O pool é o do papel visitante. */
 export function criarApp(pool: pg.Pool) {
   const app = express();
@@ -36,15 +47,30 @@ export function criarApp(pool: pg.Pool) {
   app.get("/api/docs.json", (_req, res) => void res.json(openapi));
 
   // cada EXPLAIN ANALYZE pode ocupar uma conexão por até 3 s: limite bem menor que o de leitura
-  app.post("/api/explain", limite(20, "EXPLAIN_RATE_LIMIT"), async (req, res) => {
+  const explainLimit = limite(20, "EXPLAIN_RATE_LIMIT"); // vale para as duas rotas que rodam consulta
+  app.post("/api/explain", explainLimit, async (req, res) => {
     const corpo = corpoExplain.safeParse(req.body);
     if (!corpo.success) {
       return void res.status(400).json({
-        error: "Envie { sql: texto, analyze?: true | false }.",
-        details: corpo.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+        error: "Envie { sql: texto, analyze?: true | false }.", ...invalido(corpo.error.issues),
       });
     }
     res.json(await explicar(pool, corpo.data.sql, corpo.data.analyze));
+  });
+
+  app.post("/api/indice-hipotetico", explainLimit, async (req, res) => {
+    const corpo = corpoIndice.safeParse(req.body);
+    if (!corpo.success) {
+      return void res.status(400).json({ error: "Envie { sql, tabela, colunas: [1 a 3 colunas] }.", ...invalido(corpo.error.issues) });
+    }
+    res.json(await compararIndice(pool, corpo.data.sql, corpo.data.tabela, corpo.data.colunas));
+  });
+
+  // o schema não muda enquanto o servidor roda: consulta uma vez (e de novo se der erro)
+  let tabelas: Promise<Tabela[]> | null = null;
+  app.get("/api/tabelas", async (_req, res) => {
+    tabelas ??= listarTabelas(pool).catch((err) => { tabelas = null; throw err; });
+    res.json(await tabelas);
   });
 
   app.use("/api", (_req, res) => void res.status(404).json({ error: "Rota não encontrada" }));

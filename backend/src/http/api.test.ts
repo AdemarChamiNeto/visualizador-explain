@@ -57,6 +57,22 @@ test("falha da consulta é de quem enviou: 422 com o tipo e a posição; corpo e
   assert.equal((await post({ sql: "x".repeat(30_000) })).status, 413);
 });
 
+test("índice hipotético por HTTP: 200 com os dois planos; coluna que não existe é 400; e a lista de tabelas", async () => {
+  const chamar = (corpo: unknown) =>
+    fetch(`${origem}/api/indice-hipotetico`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
+  const ok = await chamar({ sql: "SELECT * FROM pedidos WHERE cliente_id = 42", tabela: "pedidos", colunas: ["cliente_id"] });
+  assert.equal(ok.status, 200);
+  const r = (await ok.json()) as { usado: boolean; antes: unknown[]; depois: unknown[] };
+  assert.equal(r.usado, true);
+  const ruim = await chamar({ sql: "SELECT 1", tabela: "pedidos", colunas: ["nao_existe"] });
+  assert.equal(ruim.status, 400);
+  assert.equal(((await ruim.json()) as { tipo: string }).tipo, "entrada");
+  assert.equal((await chamar({ sql: "SELECT 1", tabela: "pedidos", colunas: ["a", "b", "c", "d"] })).status, 400);
+
+  const tabelas = (await (await fetch(`${origem}/api/tabelas`)).json()) as { tabela: string }[];
+  assert.equal(tabelas.length, 5);
+});
+
 test("banco fora é falha nossa: 503 com Retry-After e mensagem genérica com id", async () => {
   const fora = new pg.Pool({ connectionString: "postgres://visitante:x@127.0.0.1:1/nada", connectionTimeoutMillis: 500 });
   const s = criarApp(fora).listen(0);

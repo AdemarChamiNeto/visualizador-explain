@@ -43,8 +43,9 @@ O papel `visitante` é a parte mais sensível do projeto. Cada camada cobre o qu
 | **`default_transaction_read_only`** | escrita, mesmo se alguma permissão escapar |
 | **`statement_timeout` 3 s**, `lock_timeout` 1 s, `idle_in_transaction_session_timeout` 5 s | produto cartesiano, `pg_sleep`, conexão presa |
 | **`work_mem` 4 MB** e **5 conexões** no máximo | ordenação gigante em memória, esgotar o banco |
+| **HypoPG só por duas funções** (`hipotetico.criar_indice` e `limpar`, `SECURITY DEFINER`); o `public`, onde a extensão mora, fica fechado | um `SELECT hypopg_create_index(...) FROM generate_series(1, 1000000)` encheria a memória da sessão; a função valida tabela e colunas da loja (com `%I`) e aceita no máximo 3 índices por sessão |
 
-Testado em `src/db/visitante.test.ts`. As camadas da API (um comando por vez, `SET LOCAL` a cada consulta, `DISCARD ALL` e `hypopg_reset()` ao devolver a conexão, rate limit) vêm no PR da API.
+Testado em `src/db/visitante.test.ts`. As camadas da execução (um comando por vez, `SET LOCAL` a cada consulta, `ROLLBACK` + `hipotetico.limpar()` + `DISCARD ALL` ao devolver a conexão, rate limit) estão em `src/explain/executar.ts`. O `limpar()` é necessário porque o índice hipotético **não some no ROLLBACK**.
 
 ## Pontos de atenção
 - **Ainda dá para ver e cancelar consultas do próprio papel:** o visitante enxerga, em `pg_stat_activity`, o texto das consultas de outros visitantes (o mesmo papel) e pode cancelá-las com `pg_cancel_backend`. Revogar isso exige superusuário, que o Neon não dá. O impacto é baixo (consultas de exemplo, sem dado pessoal) e o rate limit diminui o abuso.
