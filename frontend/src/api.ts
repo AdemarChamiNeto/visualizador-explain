@@ -10,6 +10,14 @@ export class ErroApi extends Error {
   }
 }
 
+/** Resposta que não veio da nossa API (HTML de quem está na frente dela). */
+function semJson(status: number): string {
+  if (status === 502 || status === 503) return "O servidor está acordando (plano gratuito). Tente de novo em alguns segundos.";
+  // o Cloudflare (na frente do Render) barra corpos que parecem SQL injection, como "; DROP TABLE"
+  if (status === 403) return "A proteção da hospedagem (Cloudflare) bloqueou essa consulta por parecer um ataque. Ela nem chegou ao banco: tire o trecho suspeito (como \"; DROP\") e tente de novo.";
+  return `Erro ${status} no servidor.`;
+}
+
 async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknown): Promise<T> {
   let res: Response;
   try {
@@ -29,8 +37,7 @@ async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknow
   }
   if (res.ok && json) return json as T;
   const espera = res.headers.get("retry-after");
-  const msg = json?.error
-    ?? (res.status === 502 || res.status === 503 ? "O servidor está acordando (plano gratuito). Tente de novo em alguns segundos." : `Erro ${res.status} no servidor.`);
+  const msg = json?.error ?? semJson(res.status);
   throw new ErroApi(res.status === 429 && espera ? `${msg} (aguarde ${espera} s)` : msg, res.status, json?.tipo, json?.posicao);
 }
 
