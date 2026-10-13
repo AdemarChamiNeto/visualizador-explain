@@ -2,6 +2,8 @@
 
 Visualizador de planos de execução do PostgreSQL: roda `EXPLAIN ANALYZE` num banco de exemplo (ou lê o plano colado) e mostra a árvore com o tempo de cada nó, onde a estimativa errou e o que um **índice hipotético** mudaria.
 
+**Demo:** [visualizador-explain.onrender.com](https://visualizador-explain.onrender.com/). Para abrir direto num exemplo: [/#exemplo=juncao](https://visualizador-explain.onrender.com/#exemplo=juncao). O plano grátis do Render dorme sem visitas, e a primeira visita leva uns 30 s para acordar.
+
 <p>
   <img src="docs/arvore.png" width="100%" alt="Árvore de um plano com junção: alertas de Seq Scan e de estimativa errada no topo, a árvore com barras de tempo e o painel do nó selecionado">
 </p>
@@ -35,7 +37,7 @@ Visualizador de planos de execução do PostgreSQL: roda `EXPLAIN ANALYZE` num b
 - **Pronto para publicar:**
   - ícones, Open Graph com a árvore real, JSON-LD, `robots`/`sitemap`/`llms.txt`, privacidade e 404 de verdade;
   - GA4 e Clarity só depois do consentimento;
-  - Lighthouse **99 / 100 / 100 / 100** com um plano aberto.
+  - Lighthouse em produção: **100 / 100 / 100 / 100** na página inicial e **99 / 100 / 100 / 100** com um plano aberto.
 
 ## Arquitetura
 
@@ -67,6 +69,13 @@ docs/banco.md            roteiro do banco preenchido, decisões e camadas de seg
   | **Protocolo estendido** do `pg` | `SELECT 1; DROP TABLE pedidos`: o Postgres recusa mais de um comando |
   | `ROLLBACK` + `DISCARD ALL` ao devolver a conexão | um `set_config(..., false)` ou `pg_advisory_lock` passaria para o próximo visitante (testado com um pool de **1 conexão**) |
   | Rate limit: 20 consultas/min por IP | um visitante ocupando o banco |
+
+  **O que a produção mostrou:** o Cloudflare, que fica na frente do Render, barra antes do nosso servidor os corpos que parecem SQL injection clássico, como `SELECT 1; DROP TABLE pedidos`. Ele devolve 403 em HTML, e a tela agora explica isso. O resto chega à API e foi conferido no Neon:
+  - `DELETE` → só leitura;
+  - `public.schema_migrations` e `public.hypopg_create_index` → sem permissão;
+  - `set_config('role', 'neondb_owner', false)` → negado;
+  - `pg_sleep(10)` → cortado em 3 s;
+  - 1.000 índices hipotéticos num SELECT → para no terceiro.
 
   O banco de produção é um **projeto Neon só dele**: nada de outro sistema mora onde o visitante roda SQL.
 - **Índice hipotético sem dar a HypoPG ao visitante:**

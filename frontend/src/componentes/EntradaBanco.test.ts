@@ -50,6 +50,8 @@ describe("rodar no banco de exemplo", () => {
     ["sem rede", new TypeError("Failed to fetch"), /Sem conexão com o servidor/],
     ["servidor acordando (HTML no lugar de JSON)", new Response("<html>502</html>", { status: 503 }), /acordando/],
     ["rate limit", json({ error: "Muitas consultas." }, 429, { "retry-after": "30" }), /^Muitas consultas\. \(aguarde 30 s\)$/],
+    // visto em produção: "SELECT 1; DROP TABLE pedidos" volta 403 em HTML do Cloudflare, antes do nosso servidor
+    ["bloqueio do Cloudflare", new Response("<!DOCTYPE html><title>Blocked</title>", { status: 403, headers: { "content-type": "text/html" } }), /Cloudflare.*nem chegou ao banco/],
   ])("%s vira mensagem que diz o que fazer", async (_nome, resposta, mensagem) => {
     api(resposta);
     const w = mount(EntradaBanco);
