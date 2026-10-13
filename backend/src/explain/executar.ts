@@ -5,8 +5,9 @@ import pg from "pg";
  * timeout (migrations/002_loja.sql); aqui ficam as camadas que dependem de COMO a consulta roda:
  *  - protocolo estendido: o Postgres recusa mais de um comando ("SELECT 1; DROP ...");
  *  - transação READ ONLY com SET LOCAL a cada consulta (não confia no que a conexão traz);
- *  - ROLLBACK sempre + DISCARD ALL ao devolver a conexão: um set_config(..., false) ou um
- *    pg_advisory_lock() do visitante não passa para a consulta do próximo.
+ *  - ROLLBACK sempre + hipotetico.limpar() + DISCARD ALL ao devolver a conexão: um
+ *    set_config(..., false), um pg_advisory_lock() ou um índice hipotético (que não some no
+ *    ROLLBACK) do visitante não passa para a consulta do próximo.
  */
 
 export const MAX_SQL = 5000;
@@ -52,7 +53,39 @@ export function limparSql(sql: unknown): string {
 export async function explicar(pool: pg.Pool, sql: string, analyze = true): Promise<Explain> {
   const consulta = limparSql(sql);
   const prefixo = `EXPLAIN (${analyze ? "ANALYZE, BUFFERS, " : ""}FORMAT JSON) `;
+  return naConexao(pool, prefixo.length, async (c) => ({ plano: await rodar(c, prefixo + consulta), analyze }));
+}
 
+export type Comparacao = { antes: unknown; depois: unknown; indice: string; usado: boolean };
+
+/**
+ * Plano antes e depois de um índice hipotético. Sem ANALYZE nos dois: o ANALYZE executa de
+ * verdade e um índice que não existe não pode ser usado na execução, só no planejamento.
+ */
+export async function compararIndice(pool: pg.Pool, sql: string, tabela: string, colunas: string[]): Promise<Comparacao> {
+  const consulta = limparSql(sql);
+  const prefixo = "EXPLAIN (FORMAT JSON) ";
+  return naConexao(pool, prefixo.length, async (c) => {
+    const antes = await rodar(c, prefixo + consulta);
+    const { rows } = await c.query<{ nome: string }>("SELECT hipotetico.criar_indice($1, $2) AS nome", [tabela, colunas]);
+    const depois = await rodar(c, prefixo + consulta);
+    const indice = rows[0].nome;
+    return { antes, depois, indice, usado: JSON.stringify(depois).includes(`"Index Name":${JSON.stringify(indice)}`) };
+  });
+}
+
+export type Tabela = { tabela: string; colunas: string[] };
+
+/** Tabelas e colunas da loja, na ordem do schema (para a tela oferecer no índice hipotético). */
+export async function listarTabelas(pool: pg.Pool): Promise<Tabela[]> {
+  return naConexao(pool, 0, async (c) => (await c.query<Tabela>(
+    `SELECT table_name AS tabela, array_agg(column_name::text ORDER BY ordinal_position) AS colunas
+       FROM information_schema.columns WHERE table_schema = 'loja' GROUP BY table_name ORDER BY table_name`,
+  )).rows);
+}
+
+/** Uma conexão do pool, numa transação só leitura, sempre limpa ao devolver. */
+async function naConexao<T>(pool: pg.Pool, tamanhoPrefixo: number, fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
   let client: pg.PoolClient;
   try {
     client = await pool.connect();
@@ -63,21 +96,25 @@ export async function explicar(pool: pg.Pool, sql: string, analyze = true): Prom
   try {
     await client.query("BEGIN READ ONLY");
     await client.query(`SET LOCAL statement_timeout = ${TIMEOUT_MS}; SET LOCAL lock_timeout = 1000; SET LOCAL work_mem = '4MB'; SET LOCAL search_path = loja`);
-    // queryMode existe no pg 8.23, mas ainda não nos tipos do @types/pg
-    const config: pg.QueryConfig & { queryMode: "extended" } = { text: prefixo + consulta, queryMode: "extended" };
-    const r = await client.query(config);
-    return { plano: r.rows[0]["QUERY PLAN"], analyze };
+    return await fn(client);
   } catch (err) {
-    throw traduzir(err, prefixo.length);
+    throw traduzir(err, tamanhoPrefixo);
   } finally {
     try {
       await client.query("ROLLBACK");
+      await client.query("SELECT hipotetico.limpar()");
       await client.query("DISCARD ALL");
     } catch (err) {
       quebrada = err as Error; // conexão em estado ruim: descarta em vez de devolver ao pool
     }
     client.release(quebrada);
   }
+}
+
+async function rodar(c: pg.PoolClient, texto: string): Promise<unknown> {
+  // protocolo estendido: um comando só. queryMode existe no pg 8.23, mas ainda não nos tipos do @types/pg
+  const config: pg.QueryConfig & { queryMode: "extended" } = { text: texto, queryMode: "extended" };
+  return (await c.query(config)).rows[0]["QUERY PLAN"];
 }
 
 /** Erro do Postgres → de quem é a falha. Códigos em https://www.postgresql.org/docs/current/errcodes-appendix.html */
@@ -92,6 +129,7 @@ function traduzir(err: unknown, tamanhoPrefixo: number): Error {
   if (codigo === "25006") return new ErroConsulta("Só consultas de leitura: o banco de exemplo não aceita alterações.", "escrita");
   if (codigo === "42501") return new ErroConsulta(`Sem permissão: ${msg}. Só as tabelas da loja estão liberadas.`, "permissao");
   if (codigo === "42601" && /multiple commands/.test(msg)) return new ErroConsulta("Envie um comando por vez.", "sintaxe");
+  if (codigo === "22023") return new ErroConsulta(msg, "entrada"); // validação do índice hipotético
   if (codigo.startsWith("53") || codigo.startsWith("54")) return new ErroConsulta(`A consulta passou de um limite do banco: ${msg}`, "limite");
   // classe 42 (sintaxe, tabela/coluna inexistente), 22 (dado inválido) e 0A (não suportado): erro na consulta
   if (/^(42|22|0A|21)/.test(codigo)) return new ErroConsulta(msg, "sintaxe", posicao);

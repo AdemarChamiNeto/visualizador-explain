@@ -44,6 +44,39 @@ export const openapi = {
         },
       },
     },
+    "/api/indice-hipotetico": {
+      post: {
+        summary: "Plano antes e depois de um índice hipotético (HypoPG)",
+        description: "O índice não é criado de verdade: só o planejador o enxerga. Por isso os dois planos são sem ANALYZE.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["sql", "tabela", "colunas"],
+                additionalProperties: false,
+                properties: {
+                  sql: { type: "string", maxLength: 5000 },
+                  tabela: { type: "string", examples: ["pedidos"] },
+                  colunas: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, examples: [["cliente_id"]] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: "Os dois planos, o nome do índice e se o planejador o usou", content: { "application/json": { schema: { type: "object", properties: { antes: { type: "array" }, depois: { type: "array" }, indice: { type: "string" }, usado: { type: "boolean" } } } } } },
+          400: erro("Corpo inválido, tabela ou coluna que não existe"),
+          422: erro("A consulta falhou ou passou do limite de índices"),
+          429: erro("Rate limit (o mesmo do /api/explain)"),
+          503: erro("Banco indisponível ou ocupado"),
+        },
+      },
+    },
+    "/api/tabelas": {
+      get: { summary: "Tabelas e colunas do banco de exemplo", responses: { 200: { description: "[{ tabela, colunas[] }]" }, 503: erro("Banco indisponível") } },
+    },
   },
   components: {
     schemas: {
