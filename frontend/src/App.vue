@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
+import ListaAlertas from "./componentes/ListaAlertas.vue";
 import NoPlano from "./componentes/NoPlano.vue";
+import PainelNo from "./componentes/PainelNo.vue";
 import { gerarAlertas } from "./plano/alertas";
-import { lerTexto, PlanoInvalido } from "./plano/ler";
+import { lerTexto, percorrer, PlanoInvalido } from "./plano/ler";
 import type { Plano } from "./plano/tipos";
 import { tempo } from "./plano/formato";
 import juncao from "./plano/exemplos/juncao.json";
@@ -22,13 +24,23 @@ const texto = ref("");
 const erro = ref("");
 const plano = ref<Plano | null>(null);
 const selecionado = ref<string | null>(null);
-const comAlerta = computed(() => new Set(plano.value ? gerarAlertas(plano.value).map((a) => a.noId) : []));
+const alertas = computed(() => (plano.value ? gerarAlertas(plano.value) : []));
+const comAlerta = computed(() => new Set(alertas.value.map((a) => a.noId)));
+const noSelecionado = computed(() => (plano.value ? [...percorrer(plano.value.raiz)].find((n) => n.id === selecionado.value) ?? null : null));
+
+/** Seleciona e traz o nó para a vista (vindo de um alerta, ele pode estar fora da tela). */
+async function selecionar(id: string) {
+  selecionado.value = id;
+  await nextTick();
+  document.querySelector(`[data-no="${id}"]`)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+}
 
 function ler() {
   try {
     plano.value = lerTexto(texto.value);
     erro.value = "";
-    selecionado.value = null;
+    // abre já no nó do alerta mais grave (ou na raiz): o painel nunca começa vazio
+    selecionado.value = alertas.value[0]?.noId ?? plano.value.raiz.id;
   } catch (e) {
     if (!(e instanceof PlanoInvalido)) throw e;
     erro.value = e.message;
@@ -69,9 +81,13 @@ function exemplo(json: unknown) {
         {{ plano.totalNos }} {{ plano.totalNos === 1 ? "nó" : "nós" }}
         <template v-if="!plano.comAnalyze"> · sem ANALYZE: só estimativas</template>
       </p>
-      <ul class="arvore">
-        <NoPlano :no="plano.raiz" :selecionado="selecionado" :com-alerta="comAlerta" @selecionar="selecionado = $event" />
-      </ul>
+      <ListaAlertas :alertas="alertas" :com-analyze="plano.comAnalyze" @selecionar="selecionar" />
+      <div class="plano-e-painel">
+        <ul class="arvore" aria-label="Árvore do plano">
+          <NoPlano :no="plano.raiz" :selecionado="selecionado" :com-alerta="comAlerta" @selecionar="selecionar" />
+        </ul>
+        <PainelNo v-if="noSelecionado" :key="noSelecionado.id" :no="noSelecionado" />
+      </div>
     </section>
   </main>
 </template>
@@ -92,4 +108,9 @@ textarea { width: 100%; resize: vertical; border: 1px solid var(--borda); border
 .exemplos, .nota { margin: 0; font-size: .9em; color: var(--suave); }
 .erro { margin: 0; padding: 8px 10px; border-radius: var(--raio); background: var(--aviso-fundo); color: var(--aviso); }
 .resumo { margin: 0 0 12px; color: var(--suave); }
+.resultado { display: grid; gap: 16px; align-content: start; }
+.resultado > h2, .resumo { margin-bottom: 0; }
+.plano-e-painel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 16px; align-items: start; }
+.plano-e-painel > aside { position: sticky; top: 12px; }
+@media (max-width: 1100px) { .plano-e-painel { grid-template-columns: minmax(0, 1fr); } .plano-e-painel > aside { position: static; } }
 </style>

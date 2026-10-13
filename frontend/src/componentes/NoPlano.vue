@@ -29,7 +29,7 @@ const calor = computed(() => {
 </script>
 
 <template>
-  <li class="no" :class="{ selecionado: selecionado === no.id }">
+  <li class="no" :class="{ selecionado: selecionado === no.id }" :data-no="no.id">
     <div class="linha">
       <button v-if="no.filhos.length" type="button" class="recolher" :aria-expanded="aberto"
         :aria-label="aberto ? 'Recolher' : 'Expandir'" @click="aberto = !aberto">{{ aberto ? "▾" : "▸" }}</button>
