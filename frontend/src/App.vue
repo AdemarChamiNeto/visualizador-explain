@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import EntradaBanco from "./componentes/EntradaBanco.vue";
+import IndiceHipotetico from "./componentes/IndiceHipotetico.vue";
 import ListaAlertas from "./componentes/ListaAlertas.vue";
 import NoPlano from "./componentes/NoPlano.vue";
 import PainelNo from "./componentes/PainelNo.vue";
@@ -23,6 +24,11 @@ const EXEMPLOS = [
 
 const aba = ref<"banco" | "colar">("banco");
 const texto = ref("");
+/** Consulta que gerou o plano no banco de exemplo (o índice hipotético roda a mesma); null quando o plano foi colado. */
+const sqlAtual = ref<string | null>(null);
+const comIndiceHipotetico = ref(false);
+/** O plano real enquanto se olha o plano com o índice hipotético (para voltar a ele). */
+const planoReal = ref<Plano | null>(null);
 const erro = ref("");
 const plano = ref<Plano | null>(null);
 const selecionado = ref<string | null>(null);
@@ -37,8 +43,11 @@ async function selecionar(id: string) {
   document.querySelector(`[data-no="${id}"]`)?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
 }
 
-function abrir(p: Plano) {
+function abrir(p: Plano, sql: string | null = null, hipotetico = false) {
+  planoReal.value = hipotetico ? planoReal.value ?? plano.value : null;
   plano.value = p;
+  sqlAtual.value = sql;
+  comIndiceHipotetico.value = hipotetico;
   // abre já no nó do alerta mais grave (ou na raiz): o painel nunca começa vazio
   selecionado.value = alertas.value[0]?.noId ?? p.raiz.id;
 }
@@ -71,7 +80,7 @@ function exemplo(json: unknown) {
         <button type="button" role="tab" :aria-selected="aba === 'banco'" @click="aba = 'banco'">Banco de exemplo</button>
         <button type="button" role="tab" :aria-selected="aba === 'colar'" @click="aba = 'colar'">Colar um plano</button>
       </div>
-      <EntradaBanco v-if="aba === 'banco'" @plano="(json) => abrir(lerPlano(json))" />
+      <EntradaBanco v-if="aba === 'banco'" @plano="(json, sql) => abrir(lerPlano(json), sql)" />
       <template v-else>
       <label for="plano-json">Saída de <code>EXPLAIN (ANALYZE, FORMAT JSON)</code></label>
       <textarea id="plano-json" v-model="texto" class="sql" rows="10" spellcheck="false" placeholder='[ { "Plan": { "Node Type": ... } } ]'></textarea>
@@ -91,9 +100,14 @@ function exemplo(json: unknown) {
         <template v-if="plano.execucaoMs !== null">Execução: <strong>{{ tempo(plano.execucaoMs) }}</strong> · </template>
         <template v-if="plano.planejamentoMs !== null">planejamento: {{ tempo(plano.planejamentoMs) }} · </template>
         {{ plano.totalNos }} {{ plano.totalNos === 1 ? "nó" : "nós" }}
-        <template v-if="!plano.comAnalyze"> · sem ANALYZE: só estimativas</template>
+        <template v-if="comIndiceHipotetico">
+          · com o índice hipotético (só estimativas) ·
+          <button v-if="planoReal" type="button" class="link" @click="abrir(planoReal, sqlAtual)">Voltar ao plano real</button>
+        </template>
+        <template v-else-if="!plano.comAnalyze"> · sem ANALYZE: só estimativas</template>
       </p>
-      <ListaAlertas :alertas="alertas" :com-analyze="plano.comAnalyze" @selecionar="selecionar" />
+      <IndiceHipotetico v-if="sqlAtual" :sql="sqlAtual" :plano="plano" @ver-plano="(json) => abrir(lerPlano(json), sqlAtual, true)" />
+      <ListaAlertas v-if="!comIndiceHipotetico" :alertas="alertas" :com-analyze="plano.comAnalyze" @selecionar="selecionar" />
       <div class="plano-e-painel">
         <ul class="arvore" aria-label="Árvore do plano">
           <NoPlano :no="plano.raiz" :selecionado="selecionado" :com-alerta="comAlerta" @selecionar="selecionar" />
@@ -113,6 +127,7 @@ function exemplo(json: unknown) {
 h2 { font-size: 1.05rem; margin: 0 0 10px; }
 .entrada { display: grid; gap: 8px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; }
 .resumo { margin: 0 0 12px; color: var(--suave); }
+.link { background: none; border: 0; padding: 0; color: var(--destaque); cursor: pointer; text-decoration: underline; }
 .abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); margin-bottom: 4px; }
 .abas button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; color: var(--suave); }
 .abas button[aria-selected="true"] { color: var(--texto); border-bottom-color: var(--destaque); font-weight: 600; }
