@@ -7,8 +7,11 @@ const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../mi
 /** Número fixo para o advisory lock: duas instâncias subindo juntas não migram ao mesmo tempo. */
 const LOCK_ID = 7_340_002;
 
-/** Aplica, em ordem, os arquivos de migrations/ que ainda não rodaram (cada um numa transação). Roda como o dono do banco. */
-export async function migrate(databaseUrl: string, log: (msg: string) => void = console.log): Promise<string[]> {
+/**
+ * Aplica, em ordem, os arquivos de migrations/ que ainda não rodaram (cada um numa transação)
+ * e define a senha do papel visitante. Roda como o dono do banco.
+ */
+export async function migrate(databaseUrl: string, visitorPassword: string, log: (msg: string) => void = console.log): Promise<string[]> {
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   const applied: string[] = [];
@@ -34,9 +37,19 @@ export async function migrate(databaseUrl: string, log: (msg: string) => void = 
       applied.push(file);
       log(`migração aplicada: ${file}`);
     }
+    // a senha vem do ambiente e é trocada a cada subida (ALTER ROLE não aceita parâmetro $1)
+    await client.query(`ALTER ROLE visitante WITH LOGIN PASSWORD ${client.escapeLiteral(visitorPassword)}`);
   } finally {
     await client.query("SELECT pg_advisory_unlock($1)", [LOCK_ID]).catch(() => {});
     await client.end();
   }
   return applied;
+}
+
+/** URL de conexão do visitante: o mesmo servidor e banco do dono, com o usuário e a senha do visitante. */
+export function visitorUrl(databaseUrl: string, visitorPassword: string): string {
+  const u = new URL(databaseUrl);
+  u.username = "visitante";
+  u.password = visitorPassword;
+  return u.toString();
 }
