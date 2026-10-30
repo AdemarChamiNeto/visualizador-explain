@@ -45,7 +45,7 @@ export type Tabela = { tabela: string; colunas: string[] };
 export type Comparacao = { antes: unknown; depois: unknown; indice: string; usado: boolean };
 
 export const api = {
-  explicar: (sql: string, analyze: boolean) => chamar<{ plano: unknown; analyze: boolean }>("POST", "/explain", { sql, analyze }),
+  explicar: (sql: string, analyze: boolean) => chamar<{ plano: unknown; analyze: boolean; aviso?: string }>("POST", "/explain", { sql, analyze }),
   compararIndice: (sql: string, tabela: string, colunas: string[]) => chamar<Comparacao>("POST", "/indice-hipotetico", { sql, tabela, colunas }),
   tabelas: () => chamar<Tabela[]>("GET", "/tabelas"),
 };

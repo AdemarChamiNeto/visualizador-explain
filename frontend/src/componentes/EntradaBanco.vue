@@ -9,13 +9,16 @@ const sql = ref(CONSULTAS[0].sql);
 const analyze = ref(true);
 const rodando = ref(false);
 const erro = ref("");
+const aviso = ref("");
 const campo = ref<HTMLTextAreaElement | null>(null);
 
 async function rodar() {
   rodando.value = true;
   erro.value = "";
+  aviso.value = "";
   try {
     const r = await api.explicar(sql.value, analyze.value);
+    aviso.value = r.aviso ?? ""; // ANALYZE recusado pelo custo: o plano mostrado é só o estimado
     emit("plano", r.plano, sql.value);
   } catch (e) {
     if (!(e instanceof ErroApi)) throw e;
@@ -46,6 +49,7 @@ function usar(consulta: string) {
       <label class="check"><input v-model="analyze" type="checkbox" /> ANALYZE (roda de verdade, até 3 s)</label>
     </div>
     <p v-if="erro" class="erro" role="alert">{{ erro }}</p>
+    <p v-if="aviso" class="nota" role="status">{{ aviso }}</p>
     <p class="exemplos">
       Consultas prontas:
       <button v-for="c in CONSULTAS" :key="c.nome" type="button" class="chip" :disabled="rodando" @click="usar(c.sql)">{{ c.nome }}</button>

@@ -49,6 +49,29 @@ test("não consegue virar dono pelo set_config dentro de um SELECT", async () =>
   assert.equal(await sqlstate("SELECT set_config('role', 'dono', false)"), "42501");
 });
 
+test("função nova do dono não fica executável pelo visitante (sem EXECUTE padrão para PUBLIC)", async () => {
+  const dono = new pg.Client({ connectionString: DATABASE_URL });
+  await dono.connect();
+  try {
+    await dono.query("CREATE FUNCTION loja.funcao_nova_de_teste() RETURNS int LANGUAGE sql AS 'SELECT 1'");
+    assert.equal(await sqlstate("SELECT loja.funcao_nova_de_teste()"), "42501");
+  } finally {
+    await dono.query("DROP FUNCTION IF EXISTS loja.funcao_nova_de_teste()");
+    await dono.end();
+  }
+});
+
+test("sem privilégio herdado: o visitante não é membro de papel nenhum e as funções de servidor seguem negadas", async () => {
+  const { rows } = await visitante.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = current_user",
+  );
+  assert.equal(rows[0].n, 0);
+  assert.equal(await sqlstate("SELECT pg_read_file('PG_VERSION')"), "42501");
+  assert.equal(await sqlstate("SELECT pg_ls_dir('.')"), "42501");
+  assert.equal(await sqlstate("SELECT lo_import('/etc/passwd')"), "42501");
+  assert.equal(await sqlstate("SET temp_file_limit = -1"), "42501"); // nem afrouxar limite de superusuário
+});
+
 test("consulta lenta é cortada pelo statement_timeout do papel (3 s)", async () => {
   const start = Date.now();
   assert.equal(await sqlstate("SELECT pg_sleep(10)"), "57014"); // query_canceled

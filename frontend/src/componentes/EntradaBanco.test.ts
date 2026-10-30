@@ -36,6 +36,17 @@ describe("rodar no banco de exemplo", () => {
     expect(w.emitted("plano")?.[0]).toEqual([seqScan, "SELECT * FROM pedidos WHERE cliente_id = 42"]);
   });
 
+  it("ANALYZE recusado pelo custo: entrega o plano estimado e mostra o aviso da API", async () => {
+    const aviso = "Consulta pesada demais para rodar de verdade aqui (custo estimado 95.700.000). Este é só o plano estimado, sem ANALYZE.";
+    api(json({ plano: seqScan, analyze: false, aviso }), json({ plano: seqScan, analyze: true }));
+    const w = mount(EntradaBanco);
+    await rodar(w, "SELECT * FROM itens_pedido a JOIN itens_pedido b USING (produto_id)");
+    expect(w.find("[role=status]").text()).toBe(aviso);
+    expect(w.emitted("plano")).toHaveLength(1);
+    await rodar(w, "SELECT 1"); // a próxima consulta limpa o aviso
+    expect(w.find("[role=status]").exists()).toBe(false);
+  });
+
   it("erro de sintaxe: mostra a mensagem e seleciona na consulta o ponto onde o Postgres parou", async () => {
     api(json({ error: 'syntax error at or near "FORM"', tipo: "sintaxe", posicao: 10 }, 422));
     const w = mount(EntradaBanco, { attachTo: document.body });

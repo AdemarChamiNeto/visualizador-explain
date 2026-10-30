@@ -68,6 +68,8 @@ docs/banco.md            roteiro do banco preenchido, decisões e camadas de seg
   | `BEGIN READ ONLY` + `SET LOCAL statement_timeout = 3s`, `work_mem` 4 MB, 5 conexões | escrita, `pg_sleep`, produto cartesiano, ordenação gigante |
   | **Protocolo estendido** do `pg` | `SELECT 1; DROP TABLE pedidos`: o Postgres recusa mais de um comando |
   | `ROLLBACK` + `DISCARD ALL` ao devolver a conexão | um `set_config(..., false)` ou `pg_advisory_lock` passaria para o próximo visitante (testado com um pool de **1 conexão**) |
+  | **Custo estimado acima de 5 milhões: sem `ANALYZE`** (volta só a estimativa, com aviso) | o timeout corta a consulta em 3 s, mas não o disco: um auto-join de `itens_pedido` escreveu 1,8 GB de arquivo temporário antes de ser cancelado |
+  | Função nova do dono **sem `EXECUTE` para `PUBLIC`** (`ALTER DEFAULT PRIVILEGES`) | uma função criada depois ficaria executável pelo visitante sem ninguém perceber |
   | Rate limit: 20 consultas/min por IP | um visitante ocupando o banco |
 
   **O que a produção mostrou:** o Cloudflare, que fica na frente do Render, barra antes do nosso servidor os corpos que parecem SQL injection clássico, como `SELECT 1; DROP TABLE pedidos`. Ele devolve 403 em HTML, e a tela agora explica isso. O resto chega à API e foi conferido no Neon:
@@ -76,6 +78,11 @@ docs/banco.md            roteiro do banco preenchido, decisões e camadas de seg
   - `set_config('role', 'neondb_owner', false)` → negado;
   - `pg_sleep(10)` → cortado em 3 s;
   - 1.000 índices hipotéticos num SELECT → para no terceiro.
+
+  **Sugestões de um comentário no LinkedIn (30/10/2026), e o que deu para fazer:**
+  - `temp_file_limit` seria o limite certo para o disco, mas **só superusuário define** (o Neon não dá). No lugar, o limite de custo: a consulta pronta mais pesada (ordenar 1 milhão de itens) custa 139 mil, um join de três tabelas com 1 milhão de linhas, 44 mil; as que encheriam o disco ficam entre 96 e 773 milhões;
+  - **teste de carga:** 12 `pg_sleep(10)` ao mesmo tempo, pelo pool de produção. As que pegam conexão são cortadas em 3 s (422), as que esperam demais recebem 503 com `Retry-After`; o visitante não passa de 5 conexões, o `/api/health` continua respondendo e, depois, uma consulta normal volta na hora;
+  - **privilégios herdados:** o visitante não é membro de papel nenhum; `pg_read_file`, `pg_ls_dir`, `lo_import` e `SET temp_file_limit` são negados. As funções nativas do Postgres continuam executáveis (revogar exige superusuário) e ficam contidas por timeout, `work_mem` e o limite de custo.
 
   O banco de produção é um **projeto Neon só dele**: nada de outro sistema mora onde o visitante roda SQL.
 - **Índice hipotético sem dar a HypoPG ao visitante:**
@@ -116,12 +123,13 @@ docker run -p 3020:3003 -e DATABASE_URL=postgres://dono:dono-dev@host.docker.int
 ## Testes
 
 ```bash
-cd backend && npm test    # 40 testes contra PostgreSQL real (docker compose up -d db)
-cd frontend && npm test   # 46 testes (Vitest + Vue Test Utils)
+cd backend && npm test    # 44 testes contra PostgreSQL real (docker compose up -d db)
+cd frontend && npm test   # 48 testes (Vitest + Vue Test Utils)
 ```
 
 - **Banco:**
   - o visitante não escreve (nem forçando `READ WRITE`), não lê o `public` e não vira dono;
+  - sem privilégio herdado: função nova do dono não fica executável, funções de servidor negadas;
   - a consulta lenta é cortada;
   - os dados têm o volume exato, e os totais batem com os itens;
   - os cenários do visualizador existem nos dados, inclusive a estimativa errada.
@@ -129,9 +137,11 @@ cd frontend && npm test   # 46 testes (Vitest + Vue Test Utils)
   - um comando por vez;
   - `set_config` e advisory lock não vazam para o próximo visitante;
   - a posição do erro de sintaxe sai certa;
+  - consulta de custo absurdo volta só a estimativa (em menos de 1 s), e a consulta pronta mais pesada ainda roda com `ANALYZE`;
   - índice hipotético: usado × ignorado, nome com SQL embutido recusado, limite de 3, nada sobra para a próxima consulta.
 - **API:**
   - 400/413/422/503 com a mensagem certa, rate limit com `Retry-After`;
+  - **carga:** 12 consultas lentas ao mesmo tempo dão só 422/503, nunca 500, e o banco não passa de 5 conexões;
   - **toda rota está na OpenAPI**;
   - site: 404 de verdade, cache, compressão, robots/sitemap.
 - **Leitor e alertas,** com **planos reais gravados** do banco de exemplo: tempo próprio no Nested Loop (média × 1.204 execuções), a estimativa só onde nasce e a regra do LIMIT.

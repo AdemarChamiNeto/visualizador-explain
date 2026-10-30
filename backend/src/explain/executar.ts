@@ -12,6 +12,13 @@ import pg from "pg";
 
 export const MAX_SQL = 5000;
 export const TIMEOUT_MS = 3000;
+/**
+ * Acima deste custo estimado o ANALYZE não roda: a pessoa recebe só o plano estimado. O timeout corta
+ * a consulta em 3 s, mas não o disco: um auto-join de itens_pedido escreveu 1,8 GB de arquivo
+ * temporário antes de ser cancelado, e o temp_file_limit exige superusuário (que o Neon não dá).
+ * Medido em 30/10/2026: a consulta pronta mais pesada custa 139 mil; o auto-join, 96 milhões.
+ */
+export const CUSTO_MAX_ANALYZE = 5_000_000;
 
 /** Falha de quem enviou a consulta (4xx): a mensagem do Postgres ajuda a corrigir. */
 export class ErroConsulta extends Error {
@@ -34,7 +41,7 @@ export class ErroBanco extends Error {
   }
 }
 
-export type Explain = { plano: unknown; analyze: boolean };
+export type Explain = { plano: unknown; analyze: boolean; aviso?: string };
 
 /** Pool do visitante: poucas conexões (o papel aceita 5) e espera curta por uma livre. */
 export function criarPoolVisitante(url: string) {
@@ -52,8 +59,37 @@ export function limparSql(sql: unknown): string {
 
 export async function explicar(pool: pg.Pool, sql: string, analyze = true): Promise<Explain> {
   const consulta = limparSql(sql);
-  const prefixo = `EXPLAIN (${analyze ? "ANALYZE, BUFFERS, " : ""}FORMAT JSON) `;
-  return naConexao(pool, prefixo.length, async (c) => ({ plano: await rodar(c, prefixo + consulta), analyze }));
+  const estimativa = "EXPLAIN (FORMAT JSON) ";
+  if (!analyze) return naConexao(pool, estimativa.length, async (c) => ({ plano: await rodar(c, estimativa + consulta), analyze }));
+
+  const prefixo = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ";
+  // erro de sintaxe aparece já na estimativa (a primeira a rodar): a posição desconta o prefixo dela
+  return naConexao(pool, estimativa.length, async (c) => {
+    // antes de executar de verdade, a estimativa (não roda nada): consulta absurda não vai ao disco
+    let plano: unknown;
+    await c.query("SAVEPOINT estimativa");
+    try {
+      plano = await rodar(c, estimativa + consulta);
+    } catch (err) {
+      // sem permissão já na estimativa (ex.: DELETE): o ANALYZE falha no mesmo ponto, antes de executar,
+      // e com o erro mais claro ("só leitura", da transação READ ONLY)
+      if ((err as { code?: string }).code !== "42501") throw err;
+      await c.query("ROLLBACK TO SAVEPOINT estimativa");
+      return { plano: await rodar(c, prefixo + consulta), analyze };
+    }
+    const custo = custoTotal(plano);
+    if (custo > CUSTO_MAX_ANALYZE) {
+      const aviso = `Consulta pesada demais para rodar de verdade aqui (custo estimado ${Math.round(custo).toLocaleString("pt-BR")}). Este é só o plano estimado, sem ANALYZE.`;
+      return { plano, analyze: false, aviso };
+    }
+    return { plano: await rodar(c, prefixo + consulta), analyze };
+  });
+}
+
+/** "Total Cost" do nó raiz do EXPLAIN (FORMAT JSON); 0 se o formato vier diferente. */
+function custoTotal(plano: unknown): number {
+  const raiz = (plano as { Plan?: { "Total Cost"?: number } }[] | undefined)?.[0]?.Plan;
+  return typeof raiz?.["Total Cost"] === "number" ? raiz["Total Cost"] : 0;
 }
 
 export type Comparacao = { antes: unknown; depois: unknown; indice: string; usado: boolean };

@@ -17,7 +17,7 @@ export const openapi = {
     "/api/explain": {
       post: {
         summary: "Plano de execução de uma consulta no banco de exemplo",
-        description: "Um comando por vez, só leitura. Com analyze (padrão), a consulta roda de verdade e o plano traz tempos e linhas reais.",
+        description: "Um comando por vez, só leitura. Com analyze (padrão), a consulta roda de verdade e o plano traz tempos e linhas reais. Se o custo estimado passar de 5 milhões, ela não roda: a resposta traz só o plano estimado, analyze false e um aviso.",
         requestBody: {
           required: true,
           content: {
@@ -35,7 +35,7 @@ export const openapi = {
           },
         },
         responses: {
-          200: { description: "Plano (saída de EXPLAIN FORMAT JSON)", content: { "application/json": { schema: { type: "object", properties: { plano: { type: "array" }, analyze: { type: "boolean" } } } } } },
+          200: { description: "Plano (saída de EXPLAIN FORMAT JSON)", content: { "application/json": { schema: { type: "object", properties: { plano: { type: "array" }, analyze: { type: "boolean" }, aviso: { type: "string", description: "Presente quando o ANALYZE foi recusado pelo custo estimado" } } } } } },
           400: erro("Corpo inválido ou consulta vazia/grande demais"),
           413: erro("Corpo grande demais"),
           422: erro("A consulta falhou: sintaxe (com posição), escrita, permissão, tempo ou limite"),

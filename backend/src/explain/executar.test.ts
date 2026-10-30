@@ -2,7 +2,7 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import { migrate, visitorUrl } from "../db/migrate.js";
-import { criarPoolVisitante, ErroConsulta, explicar } from "./executar.js";
+import { criarPoolVisitante, CUSTO_MAX_ANALYZE, ErroConsulta, explicar } from "./executar.js";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://dono:dono-dev@localhost:5434/explain_test";
 const PASSWORD = process.env.VISITANTE_PASSWORD ?? "visitante-dev";
@@ -35,6 +35,22 @@ test("devolve o plano em JSON, com ANALYZE (tempo real) ou só a estimativa", as
   const semAnalyze = await plano("SELECT * FROM pedidos WHERE cliente_id = 42", false);
   assert.equal(semAnalyze["Execution Time"], undefined);
   assert.equal(semAnalyze.Plan["Actual Rows"], undefined);
+});
+
+test("consulta de custo absurdo não roda de verdade: volta só a estimativa, com aviso", async () => {
+  const inicio = Date.now();
+  // auto-join de 1 milhão de linhas: com ANALYZE, escrevia 1,8 GB de arquivo temporário antes do timeout
+  const r = await explicar(pool, "SELECT * FROM itens_pedido a JOIN itens_pedido b USING (produto_id) ORDER BY a.quantidade");
+  assert.ok(Date.now() - inicio < 1000, "não deveria ter executado a consulta");
+  assert.equal(r.analyze, false);
+  assert.match(r.aviso ?? "", /pesada demais/);
+  const topo = (r.plano as Topo[])[0];
+  assert.ok((topo.Plan["Total Cost"] as number) > CUSTO_MAX_ANALYZE);
+  assert.equal(topo["Execution Time"], undefined);
+  // a consulta pronta mais pesada do site (ordenar 1 milhão de itens) continua rodando com ANALYZE
+  const pronta = await explicar(pool, "SELECT * FROM itens_pedido ORDER BY quantidade, preco_unitario_centavos");
+  assert.equal(pronta.analyze, true);
+  assert.equal(pronta.aviso, undefined);
 });
 
 test("um comando por vez: o segundo comando nunca roda", async () => {
